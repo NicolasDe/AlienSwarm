@@ -7113,7 +7113,7 @@ bool CBaseEntity::CallScriptFunction( const char *pFunctionName, ScriptVariant_t
 		return false;
 	}
 
-
+	g_pScriptVM->SetValue("owninginstance", this->GetScriptInstance());
 	HSCRIPT hFunc = m_ScriptScope.LookupFunction( pFunctionName );
 
 	if( hFunc )

@@ -16,7 +16,8 @@
 #include "isaverestore.h"
 #include "gamerules.h"
 #ifdef _WIN32
-//#include "vscript_server_nut.h"
+#include "vscript_server_nut.h"
+#include "spawn_helper_nut.h"
 #endif
 
 extern ScriptClassDesc_t * GetScriptDesc( CBaseEntity * );
@@ -266,6 +267,40 @@ static const char *DoUniqueString( const char *pszBase )
 	return szBuf;
 }
 
+static void DoEntFireNoHandle(const char *pszTarget, const char *pszAction, const char *pszValue, float delay)
+{
+	const char *target = "", *action = "Use";
+	variant_t value;
+
+	target = STRING(AllocPooledString(pszTarget));
+
+	// Don't allow them to run anything on a point_servercommand unless they're the host player. Otherwise they can ent_fire
+	// and run any command on the server. Admittedly, they can only do the ent_fire if sv_cheats is on, but 
+	// people complained about users resetting the rcon password if the server briefly turned on cheats like this:
+	//    give point_servercommand
+	//    ent_fire point_servercommand command "rcon_password mynewpassword"
+	if (gpGlobals->maxClients > 1 && V_stricmp(target, "point_servercommand") == 0)
+	{
+		return;
+	}
+
+	if (*pszAction)
+	{
+		action = STRING(AllocPooledString(pszAction));
+	}
+	if (*pszValue)
+	{
+		value.SetString(AllocPooledString(pszValue));
+	}
+	if (delay < 0)
+	{
+		delay = 0;
+	}
+
+	g_EventQueue.AddEvent(target, action, value, delay, 0, 0);
+}
+
+
 static void DoEntFire( const char *pszTarget, const char *pszAction, const char *pszValue, float delay, HSCRIPT hActivator, HSCRIPT hCaller )
 {
 	const char *target = "", *action = "Use";
@@ -421,7 +456,7 @@ bool VScriptServerInit()
 
 				ScriptRegisterFunction( g_pScriptVM, Time, "Get the current server time" );
 				ScriptRegisterFunction( g_pScriptVM, FrameTime, "Get the time spent on the server in the last frame" );
-				ScriptRegisterFunction( g_pScriptVM, DoEntFire, SCRIPT_ALIAS( "EntFire", "Generate and entity i/o event" ) );
+				ScriptRegisterFunction(g_pScriptVM, DoEntFire, "Generate and entity i/o event");
 				ScriptRegisterFunctionNamed( g_pScriptVM, DoEntFireByInstanceHandle, "EntFireByHandle", "Generate and entity i/o event. First parameter is an entity instance." );
 				ScriptRegisterFunction( g_pScriptVM, DoUniqueString, SCRIPT_ALIAS( "UniqueString", "Generate a string guaranteed to be unique across the life of the script VM, with an optional root string. Useful for adding data to tables when not sure what keys are already in use in that table." ) );
 				ScriptRegisterFunctionNamed( g_pScriptVM, ScriptCreateSceneEntity, "CreateSceneEntity", "Create a scene entity to play the specified scene." );
@@ -440,7 +475,8 @@ bool VScriptServerInit()
 
 				if ( scriptLanguage == SL_SQUIRREL )
 				{
-					//g_pScriptVM->Run( g_Script_vscript_server );
+					g_pScriptVM->Run(g_Script_vscript_server);
+					g_pScriptVM->Run(g_Script_spawn_helper);
 				}
 
 				VScriptRunScript( "mapspawn", false );
